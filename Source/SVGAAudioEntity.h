@@ -17,6 +17,6 @@
 @property (nonatomic, readonly) NSInteger endFrame;
 @property (nonatomic, readonly) NSInteger startTime;
     
-- (instancetype)initWithProtoObject:(SVGAProtoAudioEntity *)protoObject;
+- (instancetype)initWithSource:(id)source;
     
 @end

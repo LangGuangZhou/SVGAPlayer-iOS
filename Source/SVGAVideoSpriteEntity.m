@@ -15,33 +15,13 @@
 
 @implementation SVGAVideoSpriteEntity
 
-- (instancetype)initWithJSONObject:(NSDictionary *)JSONObject {
+// 暂时支持json 和proto
+-(instancetype)initWithSource:(id)source {
+    if (!source) return nil;
     self = [super init];
     if (self) {
-        if ([JSONObject isKindOfClass:[NSDictionary class]]) {
-            NSString *imageKey = JSONObject[@"imageKey"];
-            NSString *matteKey = JSONObject[@"matteKey"];
-            NSArray<NSDictionary *> *JSONFrames = JSONObject[@"frames"];
-            if ([imageKey isKindOfClass:[NSString class]] && [JSONFrames isKindOfClass:[NSArray class]]) {
-                NSMutableArray<SVGAVideoSpriteFrameEntity *> *frames = [[NSMutableArray alloc] init];
-                [JSONFrames enumerateObjectsUsingBlock:^(NSDictionary * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-                    if ([obj isKindOfClass:[NSDictionary class]]) {
-                        [frames addObject:[[SVGAVideoSpriteFrameEntity alloc] initWithJSONObject:obj]];
-                    }
-                }];
-                _imageKey = imageKey;
-                _frames = frames;
-                _matteKey = matteKey;
-            }
-        }
-    }
-    return self;
-}
-
-- (instancetype)initWithProtoObject:(SVGAProtoSpriteEntity *)protoObject {
-    self = [super init];
-    if (self) {
-        if ([protoObject isKindOfClass:[SVGAProtoSpriteEntity class]]) {
+        if ([source isKindOfClass:[SVGAProtoSpriteEntity class]]) {
+            SVGAProtoSpriteEntity *protoObject = source;
             NSString *imageKey = protoObject.imageKey;
             NSString *matteKey = protoObject.matteKey;
             NSArray<NSDictionary *> *protoFrames = [protoObject.framesArray copy];
@@ -57,6 +37,24 @@
                 _matteKey = matteKey;
             }
         }
+        else if ([source isKindOfClass:[NSDictionary class]]) {
+            NSDictionary *JSONObject = source;
+            NSString *imageKey = JSONObject[@"imageKey"];
+            NSString *matteKey = JSONObject[@"matteKey"];
+            NSArray<NSDictionary *> *JSONFrames = JSONObject[@"frames"];
+            if ([imageKey isKindOfClass:[NSString class]] && [JSONFrames isKindOfClass:[NSArray class]]) {
+                NSMutableArray<SVGAVideoSpriteFrameEntity *> *frames = [[NSMutableArray alloc] init];
+                [JSONFrames enumerateObjectsUsingBlock:^(NSDictionary * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                    if ([obj isKindOfClass:[NSDictionary class]]) {
+                        [frames addObject:[[SVGAVideoSpriteFrameEntity alloc] initWithJSONObject:obj]];
+                    }
+                }];
+                _imageKey = imageKey;
+                _frames = frames;
+                _matteKey = matteKey;
+            }
+        }
+        else {}
     }
     return self;
 }

@@ -171,7 +171,7 @@
             return;
         }
         self.displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(next)];
-        self.displayLink.frameInterval = 60 / self.videoItem.FPS;
+        self.displayLink.preferredFramesPerSecond = self.videoItem.FPS;
         [self.displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:self.mainRunLoopMode];
     }
 }
@@ -461,6 +461,7 @@
     NSMutableDictionary *mutableDynamicTexts = [self.dynamicTexts mutableCopy];
     [mutableDynamicTexts setObject:attributedText forKey:aKey];
     self.dynamicTexts = mutableDynamicTexts;
+    
     if (self.contentLayers.count > 0) {
         CGSize bitmapSize = CGSizeMake(self.videoItem.images[aKey].size.width * self.videoItem.images[aKey].scale, self.videoItem.images[aKey].size.height * self.videoItem.images[aKey].scale);
         CGSize size = [attributedText boundingRectWithSize:bitmapSize

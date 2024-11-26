@@ -17,13 +17,21 @@
 
 @interface SVGAVideoEntity ()
 
+//处理视频的时候
 @property (nonatomic, assign) CGSize videoSize;
 @property (nonatomic, assign) int FPS;
 @property (nonatomic, assign) int frames;
+
+// 设置图片的时候
 @property (nonatomic, copy) NSDictionary<NSString *, UIImage *> *images;
 @property (nonatomic, copy) NSDictionary<NSString *, NSData *> *audiosData;
+
+// spirites的时候
 @property (nonatomic, copy) NSArray<SVGAVideoSpriteEntity *> *sprites;
+
+// 处理audio的时候
 @property (nonatomic, copy) NSArray<SVGAAudioEntity *> *audios;
+
 @property (nonatomic, copy) NSString *cacheDir;
 
 @end
@@ -39,26 +47,51 @@ static dispatch_semaphore_t videoSemaphore;
     dispatch_once(&onceToken, ^{
         videoCache = [[NSCache alloc] init];
         weakCache = [[NSMapTable alloc] initWithKeyOptions:NSPointerFunctionsStrongMemory
-        valueOptions:NSPointerFunctionsWeakMemory
-            capacity:64];
+                                              valueOptions:NSPointerFunctionsWeakMemory
+                                                  capacity:64];
         videoSemaphore = dispatch_semaphore_create(1);
     });
 }
 
-- (instancetype)initWithJSONObject:(NSDictionary *)JSONObject cacheDir:(NSString *)cacheDir {
+- (instancetype)initWithSource:(id)source cacheDir:(NSString *)cacheDir {
     self = [super init];
     if (self) {
         _videoSize = CGSizeMake(100, 100);
         _FPS = 20;
         _images = @{};
         _cacheDir = cacheDir;
-        [self resetMovieWithJSONObject:JSONObject];
+        [self resetMovieWithSource:source];
     }
     return self;
 }
 
-- (void)resetMovieWithJSONObject:(NSDictionary *)JSONObject {
-    if ([JSONObject isKindOfClass:[NSDictionary class]]) {
+- (void)resetType:(SVGAResetType)type withSource:(id)source {
+    if (type <= 0) return;
+    if (type & SVGAResetTypeAudio) {
+        [self resetAudiosWithSource:source];
+    }
+    if(type & SVGAResetTypeSprite) {
+        [self resetSpritesWithSource:source];
+    }
+    if (type & SVGAResetTypeImg) {
+        [self resetImagesWithSouce:source];
+    }
+    if (type & SVGAResetTypeMovie) {
+        [self resetMovieWithSource:source];
+    }
+}
+
+- (void)resetMovieWithSource:(id)source {
+    if ([source isKindOfClass:[SVGAProtoMovieEntity class]]) {
+        SVGAProtoMovieEntity *protoObject = source;
+        if (protoObject.hasParams) {
+            self.videoSize = CGSizeMake((CGFloat)protoObject.params.viewBoxWidth, (CGFloat)protoObject.params.viewBoxHeight);
+            self.FPS = (int)protoObject.params.fps;
+            self.frames = (int)protoObject.params.frames;
+        }
+    }
+    else if ([source isKindOfClass:[NSDictionary class]]) {
+        NSDictionary *JSONObject = source;
         NSDictionary *movieObject = JSONObject[@"movie"];
         if ([movieObject isKindOfClass:[NSDictionary class]]) {
             NSDictionary *viewBox = movieObject[@"viewBox"];
@@ -81,63 +114,71 @@ static dispatch_semaphore_t videoSemaphore;
     }
 }
 
-- (void)resetImagesWithJSONObject:(NSDictionary *)JSONObject {
-    if ([JSONObject isKindOfClass:[NSDictionary class]]) {
+// 多个资源的系列化来源
+- (void)resetImagesWithSouce:(id)source {
+    
+    if ([source isKindOfClass:[SVGAProtoMovieEntity class]]) {
+        SVGAProtoMovieEntity *protoObject = source;
         NSMutableDictionary<NSString *, UIImage *> *images = [[NSMutableDictionary alloc] init];
-        NSDictionary<NSString *, NSString *> *JSONImages = JSONObject[@"images"];
+        NSMutableDictionary<NSString *, NSData *> *audiosData = [[NSMutableDictionary alloc] init];
+        NSDictionary *protoImages = [protoObject.images copy];
+        for (NSString *key in protoImages) {
+            NSString *fileName = [[NSString alloc] initWithData:protoImages[key] encoding:NSUTF8StringEncoding];
+            if (fileName != nil) {
+                NSString *filePath = [self.cacheDir stringByAppendingFormat:@"/%@.png", fileName];
+                if (![[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+                    filePath = [self.cacheDir stringByAppendingFormat:@"/%@", fileName];
+                }
+                if ([[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+                    NSData *imageData = [NSData dataWithContentsOfFile:filePath options:NSDataReadingMappedIfSafe error:NULL];
+                    if (imageData != nil) {
+                        UIImage *image = [[UIImage alloc] initWithData:imageData scale:[UIScreen mainScreen].scale];
+                        if (image != nil) {
+                            [images setObject:image forKey:[key stringByDeletingPathExtension]];
+                        }
+                    }
+                }
+            }
+            else if ([protoImages[key] isKindOfClass:[NSData class]]) {
+                if ([SVGAVideoEntity isMP3Data:protoImages[key]]) {
+                    [audiosData setObject:protoImages[key] forKey:key];
+                } else {
+                    UIImage *image = [[UIImage alloc] initWithData:protoImages[key] scale:[UIScreen mainScreen].scale];
+                    if (image != nil) {
+                        [images setObject:image forKey:[key stringByDeletingPathExtension]];
+                    }
+                }
+            }
+        }
+        self.images = images;
+        self.audiosData = audiosData;
+        
+        return;
+    }
+    
+    if ([source isKindOfClass:[NSDictionary class]]) {
+        NSMutableDictionary<NSString *, UIImage *> *images = [[NSMutableDictionary alloc] init];
+        NSDictionary<NSString *, NSString *> *JSONImages = source[@"images"];
         if ([JSONImages isKindOfClass:[NSDictionary class]]) {
             [JSONImages enumerateKeysAndObjectsUsingBlock:^(NSString * _Nonnull key, NSString * _Nonnull obj, BOOL * _Nonnull stop) {
                 if ([obj isKindOfClass:[NSString class]]) {
                     NSString *filePath = [self.cacheDir stringByAppendingFormat:@"/%@.png", obj];
-//                    NSData *imageData = [NSData dataWithContentsOfFile:filePath];
-                    NSData *imageData = [NSData dataWithContentsOfFile:filePath options:NSDataReadingMappedIfSafe error:NULL];
-                    if (imageData != nil) {
-                        UIImage *image = [[UIImage alloc] initWithData:imageData scale:2.0];
-                        if (image != nil) {
-                            [images setObject:image forKey:[key stringByDeletingPathExtension]];
+                    if ([[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+                        NSData *imageData = [NSData dataWithContentsOfFile:filePath options:NSDataReadingMappedIfSafe error:NULL];
+                        if (imageData != nil) {
+                            UIImage *image = [[UIImage alloc] initWithData:imageData scale:2.0];
+                            if (image != nil) {
+                                [images setObject:image forKey:[key stringByDeletingPathExtension]];
+                            }
                         }
                     }
                 }
             }];
         }
         self.images = images;
+        return;
     }
-}
-
-- (void)resetSpritesWithJSONObject:(NSDictionary *)JSONObject {
-    if ([JSONObject isKindOfClass:[NSDictionary class]]) {
-        NSMutableArray<SVGAVideoSpriteEntity *> *sprites = [[NSMutableArray alloc] init];
-        NSArray<NSDictionary *> *JSONSprites = JSONObject[@"sprites"];
-        if ([JSONSprites isKindOfClass:[NSArray class]]) {
-            [JSONSprites enumerateObjectsUsingBlock:^(NSDictionary * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-                if ([obj isKindOfClass:[NSDictionary class]]) {
-                    SVGAVideoSpriteEntity *spriteItem = [[SVGAVideoSpriteEntity alloc] initWithJSONObject:obj];
-                    [sprites addObject:spriteItem];
-                }
-            }];
-        }
-        self.sprites = sprites;
-    }
-}
-
-- (instancetype)initWithProtoObject:(SVGAProtoMovieEntity *)protoObject cacheDir:(NSString *)cacheDir {
-    self = [super init];
-    if (self) {
-        _videoSize = CGSizeMake(100, 100);
-        _FPS = 20;
-        _images = @{};
-        _cacheDir = cacheDir;
-        [self resetMovieWithProtoObject:protoObject];
-    }
-    return self;
-}
-
-- (void)resetMovieWithProtoObject:(SVGAProtoMovieEntity *)protoObject {
-    if (protoObject.hasParams) {
-        self.videoSize = CGSizeMake((CGFloat)protoObject.params.viewBoxWidth, (CGFloat)protoObject.params.viewBoxHeight);
-        self.FPS = (int)protoObject.params.fps;
-        self.frames = (int)protoObject.params.frames;
-    }
+    
 }
 
 + (BOOL)isMP3Data:(NSData *)data {
@@ -150,63 +191,46 @@ static dispatch_semaphore_t videoSemaphore;
     return result;
 }
 
-- (void)resetImagesWithProtoObject:(SVGAProtoMovieEntity *)protoObject {
-    NSMutableDictionary<NSString *, UIImage *> *images = [[NSMutableDictionary alloc] init];
-    NSMutableDictionary<NSString *, NSData *> *audiosData = [[NSMutableDictionary alloc] init];
-    NSDictionary *protoImages = [protoObject.images copy];
-    for (NSString *key in protoImages) {
-        NSString *fileName = [[NSString alloc] initWithData:protoImages[key] encoding:NSUTF8StringEncoding];
-        if (fileName != nil) {
-            NSString *filePath = [self.cacheDir stringByAppendingFormat:@"/%@.png", fileName];
-            if (![[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
-                filePath = [self.cacheDir stringByAppendingFormat:@"/%@", fileName];
-            }
-            if ([[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
-//                NSData *imageData = [NSData dataWithContentsOfFile:filePath];
-                NSData *imageData = [NSData dataWithContentsOfFile:filePath options:NSDataReadingMappedIfSafe error:NULL];
-                if (imageData != nil) {
-                    UIImage *image = [[UIImage alloc] initWithData:imageData scale:2.0];
-                    if (image != nil) {
-                        [images setObject:image forKey:key];
-                    }
-                }
-            }
-        }
-        else if ([protoImages[key] isKindOfClass:[NSData class]]) {
-            if ([SVGAVideoEntity isMP3Data:protoImages[key]]) {
-                [audiosData setObject:protoImages[key] forKey:key];
-            } else {
-                UIImage *image = [[UIImage alloc] initWithData:protoImages[key] scale:2.0];
-                if (image != nil) {
-                    [images setObject:image forKey:key];
-                }
-            }
-        }
-    }
-    self.images = images;
-    self.audiosData = audiosData;
-}
-
-- (void)resetSpritesWithProtoObject:(SVGAProtoMovieEntity *)protoObject {
+- (void)resetSpritesWithSource:(id)source {
     NSMutableArray<SVGAVideoSpriteEntity *> *sprites = [[NSMutableArray alloc] init];
-    NSArray *protoSprites = [protoObject.spritesArray copy];
-    [protoSprites enumerateObjectsUsingBlock:^(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-        if ([obj isKindOfClass:[SVGAProtoSpriteEntity class]]) {
-            SVGAVideoSpriteEntity *spriteItem = [[SVGAVideoSpriteEntity alloc] initWithProtoObject:obj];
-            [sprites addObject:spriteItem];
-        }
+    NSArray *sourceSprites;
+    if ([source isKindOfClass:[SVGAProtoMovieEntity class]]) {
+        sourceSprites = [((SVGAProtoMovieEntity *)source).spritesArray copy];
+    }
+    else if ([source isKindOfClass:[NSDictionary class]]) {
+        sourceSprites = ((NSDictionary *)source)[@"sprites"];
+    }
+    else {}
+    
+    if (sourceSprites.count <= 0) {
+        return;
+    }
+    
+    [sourceSprites enumerateObjectsUsingBlock:^(NSDictionary * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        SVGAVideoSpriteEntity *spriteItem = [[SVGAVideoSpriteEntity alloc] initWithSource:obj];
+        [sprites addObject:spriteItem];
     }];
     self.sprites = sprites;
 }
 
-- (void)resetAudiosWithProtoObject:(SVGAProtoMovieEntity *)protoObject {
+- (void)resetAudiosWithSource:(id)source {
     NSMutableArray<SVGAAudioEntity *> *audios = [[NSMutableArray alloc] init];
-    NSArray *protoAudios = [protoObject.audiosArray copy];
-    [protoAudios enumerateObjectsUsingBlock:^(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-        if ([obj isKindOfClass:[SVGAProtoAudioEntity class]]) {
-            SVGAAudioEntity *audioItem = [[SVGAAudioEntity alloc] initWithProtoObject:obj];
-            [audios addObject:audioItem];
-        }
+    NSArray *sourceAudios;
+    if ([source isKindOfClass:[SVGAProtoMovieEntity class]]) {
+        sourceAudios = [((SVGAProtoMovieEntity *)source).spritesArray copy];
+    }
+    else if ([source isKindOfClass:[NSDictionary class]]) {
+        sourceAudios = ((NSDictionary *)source)[@"audios"]; // 暂时定义
+    }
+    else {}
+    
+    if (sourceAudios.count <= 0) {
+        return;
+    }
+    
+    [sourceAudios enumerateObjectsUsingBlock:^(NSDictionary * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        SVGAAudioEntity *audioItem = [[SVGAAudioEntity alloc] initWithSource:obj];
+        [audios addObject:audioItem];
     }];
     self.audios = audios;
 }
@@ -218,7 +242,7 @@ static dispatch_semaphore_t videoSemaphore;
         object = [weakCache objectForKey:cacheKey];
     }
     dispatch_semaphore_signal(videoSemaphore);
-
+    
     return  object;
 }
 
