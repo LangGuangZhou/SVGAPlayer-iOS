@@ -142,8 +142,10 @@ static dispatch_semaphore_t videoSemaphore;
 
 + (BOOL)isMP3Data:(NSData *)data {
     BOOL result = NO;
-    if (!strncmp([data bytes], MP3_MAGIC_NUMBER, strlen(MP3_MAGIC_NUMBER))) {
-        result = YES;
+    if (data && [data length] >= strlen(MP3_MAGIC_NUMBER)) {
+        if (!strncmp([data bytes], MP3_MAGIC_NUMBER, strlen(MP3_MAGIC_NUMBER))) {
+            result = YES;
+        }
     }
     return result;
 }
@@ -172,7 +174,6 @@ static dispatch_semaphore_t videoSemaphore;
         }
         else if ([protoImages[key] isKindOfClass:[NSData class]]) {
             if ([SVGAVideoEntity isMP3Data:protoImages[key]]) {
-                // mp3
                 [audiosData setObject:protoImages[key] forKey:key];
             } else {
                 UIImage *image = [[UIImage alloc] initWithData:protoImages[key] scale:2.0];
