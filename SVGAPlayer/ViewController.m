@@ -15,6 +15,7 @@
 @property (weak, nonatomic) IBOutlet UISlider *aSlider;
 @property (weak, nonatomic) IBOutlet UIButton *onBeginButton;
 
+@property (nonatomic, assign) NSInteger index;
 @end
 
 @implementation ViewController
@@ -27,6 +28,7 @@ static SVGAParser *parser;
     self.aPlayer.loops = 1;
     self.aPlayer.clearsAfterStop = YES;
     parser = [[SVGAParser alloc] init];
+    parser.cacheNextDir = @"dongxiao";
     [self onChange:nil];
 }
 
@@ -50,8 +52,8 @@ static SVGAParser *parser;
                        @"https://cdn.jsdelivr.net/gh/svga/SVGA-Samples@master/rose.svga?raw=true",
                        ];
     [UIApplication sharedApplication].networkActivityIndicatorVisible = YES;
-//    parser.enabledMemoryCache = YES;
-    [parser parseWithURL:[NSURL URLWithString:items[arc4random() % items.count]]
+    parser.enabledMemoryCache = YES;
+    [parser parseWithURL:[NSURL URLWithString:items[( ++self.index ) % items.count]]
          completionBlock:^(SVGAVideoEntity * _Nullable videoItem) {
              [UIApplication sharedApplication].networkActivityIndicatorVisible = NO;
              if (videoItem != nil) {
@@ -69,11 +71,9 @@ static SVGAParser *parser;
                  [self.aPlayer setAttributedText:str forKey:@"banner"];
 
                  [self.aPlayer startAnimation];
-                 
-//                 [self.aPlayer startAnimationWithRange:NSMakeRange(10, 25) reverse:YES];
              }
          } failureBlock:nil];
-//
+
 //        [parser parseWithURL:[NSURL URLWithString:@"https://github.com/svga/SVGA-Samples/raw/master_aep/BitmapColorArea1.svga"] completionBlock:^(SVGAVideoEntity * _Nullable videoItem) {
 //            if (videoItem != nil) {
 //                self.aPlayer.videoItem = videoItem;
@@ -81,7 +81,7 @@ static SVGAParser *parser;
 //                [self.aPlayer startAnimation];
 //            }
 //        } failureBlock:nil];
-    
+//    
 //    [parser parseWithNamed:@"Rocket" inBundle:nil completionBlock:^(SVGAVideoEntity * _Nonnull videoItem) {
 //        self.aPlayer.videoItem = videoItem;
 //        [self.aPlayer startAnimation];

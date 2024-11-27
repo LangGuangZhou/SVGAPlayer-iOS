@@ -196,8 +196,10 @@ static NSOperationQueue *unzipQueue;
 
 + (BOOL)isZIPData:(NSData *)data {
     BOOL result = NO;
-    if (!strncmp([data bytes], ZIP_MAGIC_NUMBER, strlen(ZIP_MAGIC_NUMBER))) {
-        result = YES;
+    if (data && data.length >= strlen(ZIP_MAGIC_NUMBER)) {
+        if (!strncmp([data bytes], ZIP_MAGIC_NUMBER, strlen(ZIP_MAGIC_NUMBER))) {
+            result = YES;
+        }
     }
     return result;
 }
@@ -225,7 +227,7 @@ static NSOperationQueue *unzipQueue;
             NSError *err;
             SVGAProtoMovieEntity *protoObject = [SVGAProtoMovieEntity parseFromData:inflateData error:&err];
             if (!err && [protoObject isKindOfClass:[SVGAProtoMovieEntity class]]) {
-                SVGAVideoEntity *videoItem = [[SVGAVideoEntity alloc] initWithSource:protoObject cacheDir:@""];
+                SVGAVideoEntity *videoItem = [[SVGAVideoEntity alloc] initWithSource:protoObject cacheDir:[self cacheDirectory:cacheKey]];
 //                [videoItem resetImagesWithSouce:protoObject];
 //                [videoItem resetSpritesWithSource:protoObject];
 //                [videoItem resetAudiosWithSource:protoObject];
@@ -364,7 +366,12 @@ static NSOperationQueue *unzipQueue;
 
 - (nullable NSString *)cacheDirectory:(NSString *)cacheKey {
     NSString *cacheDir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
-    return [cacheDir stringByAppendingFormat:@"/%@", cacheKey];
+    if (self.cacheNextDir && self.cacheNextDir.length >0) {
+        cacheDir = [cacheDir stringByAppendingFormat:@"/%@", self.cacheNextDir];
+    }
+    cacheDir = [cacheDir stringByAppendingFormat:@"/%@", cacheKey];
+    NSLog(@"lt -- cache dir : %@",cacheDir);
+    return cacheDir;
 }
 
 - (NSString *)MD5String:(NSString *)str {
